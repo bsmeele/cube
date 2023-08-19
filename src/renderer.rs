@@ -723,4 +723,12 @@ impl Renderer {
         };
         tmp.x * tmp.x + tmp.y * tmp.y + tmp.z * tmp.z
     }
+
+    pub fn translate_mesh(&self, mesh: &mut Mesh, translate: Vec3) {
+        for p in &mut mesh.polygon_list {
+            p.triangle.a = p.triangle.a.add(&translate);
+            p.triangle.b = p.triangle.b.add(&translate);
+            p.triangle.c = p.triangle.c.add(&translate);
+        }
+    }
 }
