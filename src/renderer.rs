@@ -7,6 +7,8 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::mem::swap;
 
+// test
+
 pub struct Renderer {
     pub camera: Camera,
 }
