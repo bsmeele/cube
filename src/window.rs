@@ -5,6 +5,7 @@ pub struct Window {
     pub width: usize,
     pub height: usize,
     pub buffer: Vec<u32>, // encoding: 0RGB
+    pub depth_buffer: Vec<usize>,
 }
 impl Window {
     pub fn new(scale: usize, width: usize, height: usize) -> Self {
@@ -31,6 +32,7 @@ impl Window {
             width,
             height,
             buffer: vec![0; width * height],
+            depth_buffer: vec![usize::MAX; width * height],
         }
     }
 

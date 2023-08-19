@@ -76,7 +76,11 @@ fn main() {
 
     let mut ship = Mesh::from_object_file("VideoShip.obj");
 
+    let mut teapot = Mesh::from_object_file("teapot.obj");
+
     let mut mountains = Mesh::from_object_file("mountains.obj");
+
+    let mut skull = Mesh::from_object_file("skull.obj");
 
     while window.handle.is_open() && !window.handle.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -130,19 +134,29 @@ fn main() {
 
         // renderer.rotate_mesh(&mut ship, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
 
+        // renderer.rotate_mesh(&mut teapot, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
+
+        // renderer.rotate_mesh(&mut skull, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
+
         // ---------- Render ----------
         renderer.clear_screen(&mut window, colors::BLACK);
 
         // renderer.draw_mesh(&mut window, &axis);
 
-        renderer.depth_sort_mesh(&mut cube);
-        renderer.draw_mesh(&mut window, &cube);
+        // renderer.depth_sort_mesh(&mut cube);
+        // renderer.draw_mesh(&mut window, &cube);
+
+        // renderer.depth_sort_mesh(&mut teapot);
+        // renderer.draw_mesh(&mut window, &teapot);
 
         // renderer.depth_sort_mesh(&mut ship);
         // renderer.draw_mesh(&mut window, &ship);
 
-        // renderer.depth_sort_mesh(&mut mountains);
-        // renderer.draw_mesh(&mut window, &mountains);
+        renderer.depth_sort_mesh(&mut mountains);
+        renderer.draw_mesh(&mut window, &mountains);
+
+        // renderer.depth_sort_mesh(&mut skull);
+        // renderer.draw_mesh(&mut window, &skull);
 
         // ---------- Update ----------
         window.handle.update_with_buffer(&window.buffer, window.width, window.height).unwrap();

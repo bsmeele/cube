@@ -5,6 +5,7 @@ use crate::window::Window;
 use std::f32::consts::PI;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
+use std::mem::swap;
 
 pub struct Renderer {
     pub camera: Camera,
@@ -141,13 +142,15 @@ impl Mesh {
                     let x = line[1].parse::<f32>().unwrap();
                     let y = line[2].parse::<f32>().unwrap();
                     let z = line[3].parse::<f32>().unwrap();
+
                     v.push(Vec3 { x, y, z });
                 },
                 "f" => {
-                    let a = line[1].parse::<usize>().unwrap();
-                    let b = line[2].parse::<usize>().unwrap();
-                    let c = line[3].parse::<usize>().unwrap();
-                    mesh.polygon_list.push(Polygon{triangle: Triangle { a: v[a-1], b: v[b-1], c: v[c-1]}, color: 0xff_ff_ff_ff, fill: true})
+                    let a = line[1].split('/').next().unwrap().parse::<usize>().unwrap();
+                    let b = line[2].split('/').next().unwrap().parse::<usize>().unwrap();
+                    let c = line[3].split('/').next().unwrap().parse::<usize>().unwrap();
+
+                    mesh.polygon_list.push(Polygon { triangle: Triangle { a: v[a - 1], b: v[b - 1], c: v[c - 1] }, color: 0xff_ff_ff_ff, fill: true })
                 },
                 _ => (),
             }
@@ -193,6 +196,13 @@ fn line_intersect(start: &Vec2, end: &Vec2, line_p: &Vec2, line_n: &Vec2) -> Vec
     start.add(&Vec2{x: (d1.x as f32 * t).floor() as isize, y: (d1.y as f32 * t).floor() as isize})
 }
 
+fn line_intersect_plane(start: &Vec3, end: &Vec3, plane_p: &Vec3, plane_n: &Vec3) -> Vec3 {
+    let d1 = end.sub(&start);
+    let d2 = plane_p.sub(&start);
+    let t = plane_n.dot(&d2) / plane_n.dot(&d1);
+    start.add(&d1.scale(t))
+}
+
 impl Renderer {
     pub fn new(fov: f32) -> Self {
         Renderer {
@@ -201,13 +211,13 @@ impl Renderer {
                 fov,
                 pitch: 0.,
                 yaw: 0.,
-            }
+            },
         }
     }
 
     pub fn clear_screen(&self, window: &mut Window, color: u32) {
-        let buffer: Vec<u32> = vec![color; window.width * window.height];
-        window.buffer = buffer;
+        window.buffer = vec![color; window.width * window.height];
+        window.depth_buffer = vec![usize::MAX; window.width * window.height];
     }
 
     fn draw_line(&self, window: &mut Window, start: Vec2, end: Vec2, color: u32) {
@@ -279,54 +289,209 @@ impl Renderer {
         // Get triangle normal
         let p1 = triangle.b.sub(&triangle.a);
         let p2 = triangle.c.sub(&triangle.a);
-        let n = p1.cross(&p2);
+        let n = p1.cross(&p2).normalise();
         // Dot product
         if n.dot(&c) > 0. { return; }
 
-        // Get projections of the corners
-        let  pa = self.project(window, triangle.a);
-        let pb = self.project(window, triangle.b);
-        let pc = self.project(window, triangle.c);
-        let t = Triangle2D{a: pa, b: pb, c: pc};
-        // Clipping
-        let triangle_list = self.clip_against_screen(t, window.width, window.height);
-        for t in triangle_list {
-            let mut pa = t.a;
-            let pb = t.b;
-            let pc = t.c;
+        // Lighting
+        let light_direction = Vec3{x: 0., y: -1., z: 1.}.normalise();
+        let color_scale = (-light_direction.dot(&n)).max(0.1);
+        let red = ((((0x00_ff_00_00 & color) >> 16) as f32) * color_scale) as u32;
+        let green = ((((0x00_00_ff_00 & color) >> 8) as f32) * color_scale) as u32;
+        let blue = (((0x00_00_00_ff & color) as f32) * color_scale) as u32;
+        let color =  0x00_00_00_00 | red << 16 | green << 8 | blue;
 
-            // Draw the triangle
-            self.draw_line(window, pa, pb, color);
-            self.draw_line(window, pa, pc, color);
-            self.draw_line(window, pb, pc, color);
+        // CLip against camera near plane
+        let mut plane_n = Vec3{x: 0., y: 0., z: 1.};
+        let angles = Vec3{x: self.camera.pitch, y: self.camera.yaw, z: 0.};
+        self.rotate(&mut plane_n, angles);
+        let plane_p = self.camera.location.add(&plane_n.scale(0.1));
+        let (n, clipped) = self.clip_against_plane(triangle.clone(), plane_p, plane_n);
 
-            if !fill { return; }
+        for i in 0..n {
+            let triangle = clipped[i];
 
-            // Use the bresenham line algorithm to go draw a line from c to each pixel between a and b
-            let dx = (pb.x - pa.x).abs();
-            let sx = if pa.x < pb.x { 1 } else { -1 };
-            let dy = -(pb.y - pa.y).abs();
-            let sy = if pa.y < pb.y { 1 } else { -1 };
-            let mut error = dx + dy;
-            let mut e2;
+            // Get projections of the corners
+            let pa = self.project(window, triangle.a);
+            let pb = self.project(window, triangle.b);
+            let pc = self.project(window, triangle.c);
+            let t = Triangle2D { a: pa, b: pb, c: pc };
 
-            loop {
-                if (pa.x as usize) < window.width && (pa.y as usize) < window.height {
-                    self.draw_line(window, pc, Vec2 { x: pa.x, y: pa.y }, color);
-                }
-                if pa.x == pb.x && pa.y == pb.y { break; }
-                e2 = 2 * error;
-                if e2 >= dy {
-                    if pa.x == pb.x { break; }
-                    error += dy;
-                    pa.x += sx;
-                }
-                if e2 <= dx {
-                    if pa.y == pb.y { break; }
-                    error += dx;
-                    pa.y += sy;
+            // Clipping
+            let triangle_list = self.clip_against_screen(t, window.width, window.height);
+
+            for t in triangle_list {
+                if fill {
+                    // Use the bresenham line algorithm to go draw a line from c to each pixel between a and b
+                    // self.bressenham_fill(window, &t, color);
+                    // self.scanline_fill(window, &t, color);
+                    self.triangle_fill(window, &t, color);
+
+                    // self.draw_line(window, t.a, t.b, 0x_00_ff_00_00);
+                    // self.draw_line(window, t.a, t.c, 0x_00_ff_00_00);
+                    // self.draw_line(window, t.b, t.c, 0x_00_ff_00_00);
+                } else {
+                    // Draw the triangle
+                    self.draw_line(window, t.a, t.b, color);
+                    self.draw_line(window, t.a, t.c, color);
+                    self.draw_line(window, t.b, t.c, color);
                 }
             }
+        }
+    }
+
+    fn bressenham_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+        let mut pa = Vec2{
+            x: clamp(0, triangle.a.x, window.width as isize),
+            y: clamp(0, triangle.a.y, window.height as isize)
+        };
+        let pb = Vec2{
+            x: clamp(0, triangle.b.x, window.width as isize),
+            y: clamp(0, triangle.b.y, window.height as isize)
+        };
+        let pc = Vec2{
+            x: clamp(0, triangle.c.x, window.width as isize),
+            y: clamp(0, triangle.c.y, window.height as isize)
+        };
+
+        let dx = (pb.x - pa.x).abs();
+        let sx = if pa.x < pb.x { 1 } else { -1 };
+        let dy = -(pb.y - pa.y).abs();
+        let sy = if pa.y < pb.y { 1 } else { -1 };
+        let mut error = dx + dy;
+        let mut e2;
+
+        loop {
+            if (pa.x as usize) < window.width && (pa.y as usize) < window.height {
+                self.draw_line(window, pc, pa.clone(), color);
+            }
+            if pa.x == pb.x && pa.y == pb.y { break; }
+            e2 = 2 * error;
+            if e2 >= dy {
+                if pa.x == pb.x { break; }
+                error += dy;
+                pa.x += sx;
+            }
+            if e2 <= dx {
+                if pa.y == pb.y { break; }
+                error += dx;
+                pa.y += sy;
+            }
+        }
+    }
+
+    fn scanline_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+        let mut pa = Vec2{
+            x: clamp(0, triangle.a.x, window.width as isize),
+            y: clamp(0, triangle.a.y, window.height as isize)
+        };
+        let pb = Vec2{
+            x: clamp(0, triangle.b.x, window.width as isize),
+            y: clamp(0, triangle.b.y, window.height as isize)
+        };
+        let pc = Vec2{
+            x: clamp(0, triangle.c.x, window.width as isize),
+            y: clamp(0, triangle.c.y, window.height as isize)
+        };
+
+        let min_x = pa.x.min(pb.x).min(pc.x);
+        let max_x = pa.x.max(pb.x).max(pc.x);
+        let min_y = pa.y.min(pb.y).min(pc.y);
+        let max_y = pa.y.max(pb.y).max(pc.y);
+
+        // Calculate area
+        // let area = 0.5 * (x3 * -y2 + y1 * (x3 - x2) + x1 * (y2 - y3) + x2 * y3) as f32;
+
+        // Iterate over each pixel in the grid
+        for y in min_y..=max_y {
+            for x in min_x..=max_x {
+                // Calculate the barycentric coordinates of the pixel
+                let a = pc.y - pa.y;
+                let b = y - triangle.a.y;
+                let c = pc.x - pa.x;
+                let d = pb.y - pa.y;
+                let e = pb.x - pa.x;
+
+                let w1 = (pa.x * a + b * c - x * a) as f32 / (d * c - e * a) as f32;
+                let w2 = (b as f32 - w1 * d as f32) / a as f32;
+                let w3 = 1. - w1 - w2;
+
+                // let w1 = (0.5 * (-y2 * x3 + y * (-x2 + x3) + x * (y2 - y3) + x2 * y3) as f32) / area;
+                // let w2 = (0.5 * (y1 * x3 + y * (x1 - x3) + x * (y3 - y1) + x1 * -y3) as f32) / area;
+                // let w3 = 1. - w1 - w2;
+
+                // Check if the pixel is inside the triangle
+                if w1 >= 0. && w2 >= 0. && w3 >= 0. && x >= 0 && x < window.width as isize && y >= 0 && y < window.height as isize  {
+                    // Fill the pixel with a character
+                    window.buffer[x as usize + y as usize * window.width] = color;
+                }
+            }
+        }
+    }
+
+    fn triangle_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+        let mut pa = Vec2{
+            x: clamp(0, triangle.a.x, window.width as isize),
+            y: clamp(0, triangle.a.y, window.height as isize)
+        };
+        let mut pb = Vec2{
+            x: clamp(0, triangle.b.x, window.width as isize),
+            y: clamp(0, triangle.b.y, window.height as isize)
+        };
+        let mut pc = Vec2{
+            x: clamp(0, triangle.c.x, window.width as isize),
+            y: clamp(0, triangle.c.y, window.height as isize)
+        };
+
+        if pb.y < pa.y {
+            swap(&mut pa, &mut pb);
+        }
+        if pc.y < pa.y {
+            swap(&mut pc, &mut pa);
+        }
+        if pc.y < pb.y {
+            swap(&mut pc, &mut pb);
+        }
+
+        let dxab = pb.x - pa.x;
+        let dxbc = pc.x - pb.x;
+        let dxac = pc.x - pa.x;
+
+        let dyab = pb.y - pa.y;
+        let dybc = pc.y - pb.y;
+        let dyac = pc.y - pa.y;
+
+        let dab = if dyab != 0 { dxab as f32 / dyab as f32 } else { 0. };
+        let dbc = if dybc != 0 { dxbc as f32 / dybc as f32 } else { 0. };
+        let dac = if dyac != 0 { dxac as f32 / dyac as f32 } else { 0. };
+
+        let mut xac = pa.x as f32;
+        let mut xabc = pa.x as f32;
+
+        for y in pa.y..pb.y {
+            let (x1, x2) = if xac < xabc {
+                ( xac.floor() as usize, xabc.floor() as usize)
+            } else {
+                ( xabc.floor() as usize, xac.floor() as usize)
+            };
+            for x in x1..x2 {
+                window.buffer[x + y as usize * window.width] = color;
+            }
+            xac += dac;
+            xabc += dab;
+        }
+        xabc = pb.x as f32;
+        for y in pb.y..pc.y {
+            let (x1, x2) = if xac < xabc {
+                ( xac.floor() as usize, xabc.floor() as usize)
+            } else {
+                ( xabc.floor() as usize, xac.floor() as usize)
+            };
+            for x in x1..x2 {
+                window.buffer[x + y as usize * window.width] = color;
+            }
+            xac += dac;
+            xabc += dbc;
         }
     }
 
@@ -416,6 +581,68 @@ impl Renderer {
             },
             3 => (0, clipped), // Triangle completely clipped
             _ => panic!("Unreachable")
+        }
+    }
+
+    fn clip_against_plane(&self, triangle: Triangle, line_p: Vec3, line_n: Vec3) -> (usize, [Triangle; 2]) {
+        let mut clipped = [Triangle::default(); 2];
+
+        // determine inside/outside points
+        let mut num_outside = 0;
+        let mut num_inside = 0;
+        let mut outside = [Vec3::default(); 3];
+        let mut inside = [Vec3::default(); 3];
+        if triangle.a.sub(&line_p).dot(&line_n) < 0. {
+            outside[num_outside] = triangle.a;
+            num_outside += 1;
+        } else {
+            inside[num_inside] = triangle.a;
+            num_inside += 1;
+        }
+        if triangle.b.sub(&line_p).dot(&line_n) < 0. {
+            outside[num_outside] = triangle.b;
+            num_outside += 1;
+        } else {
+            inside[num_inside] = triangle.b;
+            num_inside += 1;
+        }
+        if triangle.c.sub(&line_p).dot(&line_n) < 0. {
+            outside[num_outside] = triangle.c;
+            num_outside += 1;
+        } else {
+            inside[num_inside] = triangle.c;
+            num_inside += 1;
+        }
+
+        match num_outside {
+            0 => { // No clipping needed, returning triangle
+                clipped[0] = triangle;
+                (1, clipped)
+            },
+            1 => {
+                // Calculate intersection points
+                let p1 = line_intersect_plane(&inside[0], &outside[0], &line_p, &line_n);
+                let p2 = line_intersect_plane(&inside[1], &outside[0], &line_p, &line_n);
+
+                // Construct clipped triangles
+                clipped[0] = Triangle{a: inside[0], b: inside[1], c: p1};
+                clipped[1] = Triangle{a: inside[1], b: p1, c: p2};
+
+                (2, clipped)
+            }, // Clipping into two triangles
+            2 => {
+                // Calculate intersection points
+                let p1 = line_intersect_plane(&inside[0], &outside[0], &line_p, &line_n);
+                let p2 = line_intersect_plane(&inside[0], &outside[1], &line_p, &line_n);
+
+                // Construct clipped triangles
+                clipped[0] = Triangle{a: inside[0], b: p1, c: p2};
+
+                (1, clipped)
+
+            }, // Clipping into one triangle
+            3 => (0, clipped), // Triangle completely clipped
+            _ => panic!("Unreachable"),
         }
     }
 
