@@ -49,6 +49,8 @@ impl Vec2 {
     pub fn dot(&self, v: &Vec2) -> isize {
         self.x * v.x + self.y * v.y
     }
+
+    pub fn length(&self) -> f32 { (self.dot(&self) as f32).sqrt() }
 }
 
 #[derive(Copy, Clone, Debug, Default)]
@@ -161,7 +163,7 @@ impl Mesh {
 }
 
 // Draws a line between two points based on the bressenham algorithm
-fn bresenham_line(window: &mut Window, start: Vec2, end: Vec2, color: u32) {
+fn bresenham_line(window: &mut Window, start: Vec2, s_depth: f32, end: Vec2, e_depth: f32, color: u32) {
     let mut start = start;
     let dx = (end.x - start.x).abs();
     let sx = if start.x < end.x { 1 } else { -1 };
@@ -170,9 +172,17 @@ fn bresenham_line(window: &mut Window, start: Vec2, end: Vec2, color: u32) {
     let mut error = dx + dy;
     let mut e2;
 
+    let mut depth = s_depth;
+    let d_depth = (e_depth - s_depth) / (dx.max(dy) as f32);
+
     loop {
         if (start.x as usize) < window.width && (start.y as usize) < window.height {
-            window.buffer[start.x as usize + start.y as usize * window.width] = color;
+            if depth < window.depth_buffer[start.x as usize + start.y as usize * window.width]
+            {
+                window.buffer[start.x as usize + start.y as usize * window.width] = color;
+                window.depth_buffer[start.x as usize + start.y as usize * window.width] = depth;
+            }
+            depth += d_depth;
         }
         if start.x == end.x && start.y == end.y { break; }
         e2 = 2 * error;
@@ -217,10 +227,10 @@ impl Renderer {
 
     pub fn clear_screen(&self, window: &mut Window, color: u32) {
         window.buffer = vec![color; window.width * window.height];
-        window.depth_buffer = vec![usize::MAX; window.width * window.height];
+        window.depth_buffer = vec![f32::MAX; window.width * window.height];
     }
 
-    fn draw_line(&self, window: &mut Window, start: Vec2, end: Vec2, color: u32) {
+    fn draw_line(&self, window: &mut Window, start: Vec2, s_depth: f32, end: Vec2, e_depth: f32, color: u32) {
         let mut start = start;
         start.x = clamp(0, start.x, window.width as isize);
         start.y = clamp(0, start.y, window.height as isize);
@@ -229,11 +239,11 @@ impl Renderer {
         end.x = clamp(0, end.x, window.width as isize);
         end.y = clamp(0, end.y, window.height as isize);
 
-        bresenham_line(window, start, end, color);
+        bresenham_line(window, start, s_depth, end, e_depth, color);
     }
 
     // Projects a 3D point on the 2D screen
-    fn project(&self, window: &Window, point: Vec3) -> Vec2 {
+    fn project(&self, window: &Window, point: Vec3) -> (Vec2, f32) {
         let mut point = point;
 
         // Translate towards camera
@@ -256,7 +266,7 @@ impl Renderer {
         x += window.width as f32 / 2.;
         y += window.height as f32 / 2.;
 
-        return Vec2{x: x as isize, y: y as isize};
+        return (Vec2{x: x as isize, y: y as isize}, point.z);
     }
 
     // Rotates a point around (0, 0, 0), angles in degrees
@@ -312,9 +322,9 @@ impl Renderer {
             let triangle = clipped[i];
 
             // Get projections of the corners
-            let pa = self.project(window, triangle.a);
-            let pb = self.project(window, triangle.b);
-            let pc = self.project(window, triangle.c);
+            let (pa, da) = self.project(window, triangle.a);
+            let (pb, db) = self.project(window, triangle.b);
+            let (pc, dc) = self.project(window, triangle.c);
             let t = Triangle2D { a: pa, b: pb, c: pc };
 
             // Clipping
