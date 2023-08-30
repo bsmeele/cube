@@ -32,18 +32,21 @@ impl Default for Camera {
 struct Vec2 { // Used for the location on the screen, meaning positive y is down
     x: isize,
     y: isize,
+    depth: f32,
 }
 impl Vec2 {
     pub fn add(&self, v: &Vec2) -> Self {
         Self {
             x: self.x + v.x,
             y: self.y + v.y,
+            depth: self.depth + v.depth,
         }
     }
     pub fn sub(&self, v: &Vec2) -> Self {
         Self {
             x: self.x - v.x,
             y: self.y - v.y,
+            depth: self.depth - v.depth,
         }
     }
     pub fn dot(&self, v: &Vec2) -> isize {
@@ -163,26 +166,24 @@ impl Mesh {
 }
 
 // Draws a line between two points based on the bressenham algorithm
-fn bresenham_line(window: &mut Window, start: Vec2, s_depth: f32, end: Vec2, e_depth: f32, color: u32) {
+fn bresenham_line(window: &mut Window, start: Vec2, end: Vec2, color: u32) {
     let mut start = start;
     let dx = (end.x - start.x).abs();
     let sx = if start.x < end.x { 1 } else { -1 };
     let dy = -(end.y - start.y).abs();
     let sy = if start.y < end.y { 1 } else { -1 };
+    let dz = (end.depth - start.depth) / (dx.max(dy) as f32);
     let mut error = dx + dy;
     let mut e2;
 
-    let mut depth = s_depth;
-    let d_depth = (e_depth - s_depth) / (dx.max(dy) as f32);
-
     loop {
         if (start.x as usize) < window.width && (start.y as usize) < window.height {
-            if depth < window.depth_buffer[start.x as usize + start.y as usize * window.width]
+            if start.depth < window.depth_buffer[start.x as usize + start.y as usize * window.width]
             {
                 window.buffer[start.x as usize + start.y as usize * window.width] = color;
-                window.depth_buffer[start.x as usize + start.y as usize * window.width] = depth;
+                window.depth_buffer[start.x as usize + start.y as usize * window.width] = start.depth;
             }
-            depth += d_depth;
+            start.depth += dz;
         }
         if start.x == end.x && start.y == end.y { break; }
         e2 = 2 * error;
@@ -203,7 +204,7 @@ fn line_intersect(start: &Vec2, end: &Vec2, line_p: &Vec2, line_n: &Vec2) -> Vec
     let d1 = end.sub(&start);
     let d2 = line_p.sub(&start);
     let t = line_n.dot(&d2) as f32 / line_n.dot(&d1) as f32;
-    start.add(&Vec2{x: (d1.x as f32 * t).floor() as isize, y: (d1.y as f32 * t).floor() as isize})
+    start.add(&Vec2{x: (d1.x as f32 * t).floor() as isize, y: (d1.y as f32 * t).floor() as isize, depth: d1.depth * t})
 }
 
 fn line_intersect_plane(start: &Vec3, end: &Vec3, plane_p: &Vec3, plane_n: &Vec3) -> Vec3 {
@@ -230,7 +231,7 @@ impl Renderer {
         window.depth_buffer = vec![f32::MAX; window.width * window.height];
     }
 
-    fn draw_line(&self, window: &mut Window, start: Vec2, s_depth: f32, end: Vec2, e_depth: f32, color: u32) {
+    fn draw_line(&self, window: &mut Window, start: Vec2, end: Vec2, color: u32) {
         let mut start = start;
         start.x = clamp(0, start.x, window.width as isize);
         start.y = clamp(0, start.y, window.height as isize);
@@ -239,11 +240,11 @@ impl Renderer {
         end.x = clamp(0, end.x, window.width as isize);
         end.y = clamp(0, end.y, window.height as isize);
 
-        bresenham_line(window, start, s_depth, end, e_depth, color);
+        bresenham_line(window, start, end, color);
     }
 
     // Projects a 3D point on the 2D screen
-    fn project(&self, window: &Window, point: Vec3) -> (Vec2, f32) {
+    fn project(&self, window: &Window, point: Vec3) -> Vec2 {
         let mut point = point;
 
         // Translate towards camera
@@ -266,7 +267,7 @@ impl Renderer {
         x += window.width as f32 / 2.;
         y += window.height as f32 / 2.;
 
-        return (Vec2{x: x as isize, y: y as isize}, point.z);
+        return Vec2{x: x as isize, y: y as isize, depth: point.z};
     }
 
     // Rotates a point around (0, 0, 0), angles in degrees
@@ -322,9 +323,9 @@ impl Renderer {
             let triangle = clipped[i];
 
             // Get projections of the corners
-            let (pa, da) = self.project(window, triangle.a);
-            let (pb, db) = self.project(window, triangle.b);
-            let (pc, dc) = self.project(window, triangle.c);
+            let pa = self.project(window, triangle.a);
+            let pb = self.project(window, triangle.b);
+            let pc = self.project(window, triangle.c);
             let t = Triangle2D { a: pa, b: pb, c: pc };
 
             // Clipping
@@ -353,27 +354,32 @@ impl Renderer {
     fn bressenham_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
         let mut pa = Vec2{
             x: clamp(0, triangle.a.x, window.width as isize),
-            y: clamp(0, triangle.a.y, window.height as isize)
+            y: clamp(0, triangle.a.y, window.height as isize),
+            depth: triangle.a.depth,
         };
         let pb = Vec2{
             x: clamp(0, triangle.b.x, window.width as isize),
-            y: clamp(0, triangle.b.y, window.height as isize)
+            y: clamp(0, triangle.b.y, window.height as isize),
+            depth: triangle.a.depth,
         };
         let pc = Vec2{
             x: clamp(0, triangle.c.x, window.width as isize),
-            y: clamp(0, triangle.c.y, window.height as isize)
+            y: clamp(0, triangle.c.y, window.height as isize),
+            depth: triangle.a.depth,
         };
 
         let dx = (pb.x - pa.x).abs();
         let sx = if pa.x < pb.x { 1 } else { -1 };
         let dy = -(pb.y - pa.y).abs();
         let sy = if pa.y < pb.y { 1 } else { -1 };
+        let dz = (pb.depth - pa.depth) / (dx.max(dy) as f32);
         let mut error = dx + dy;
         let mut e2;
 
         loop {
             if (pa.x as usize) < window.width && (pa.y as usize) < window.height {
                 self.draw_line(window, pc, pa.clone(), color);
+                pa.depth += dz;
             }
             if pa.x == pb.x && pa.y == pb.y { break; }
             e2 = 2 * error;
@@ -393,15 +399,18 @@ impl Renderer {
     fn scanline_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
         let mut pa = Vec2{
             x: clamp(0, triangle.a.x, window.width as isize),
-            y: clamp(0, triangle.a.y, window.height as isize)
+            y: clamp(0, triangle.a.y, window.height as isize),
+            depth: triangle.a.depth,
         };
         let pb = Vec2{
             x: clamp(0, triangle.b.x, window.width as isize),
-            y: clamp(0, triangle.b.y, window.height as isize)
+            y: clamp(0, triangle.b.y, window.height as isize),
+            depth: triangle.a.depth,
         };
         let pc = Vec2{
             x: clamp(0, triangle.c.x, window.width as isize),
-            y: clamp(0, triangle.c.y, window.height as isize)
+            y: clamp(0, triangle.c.y, window.height as isize),
+            depth: triangle.a.depth,
         };
 
         let min_x = pa.x.min(pb.x).min(pc.x);
@@ -442,15 +451,18 @@ impl Renderer {
     fn triangle_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
         let mut pa = Vec2{
             x: clamp(0, triangle.a.x, window.width as isize),
-            y: clamp(0, triangle.a.y, window.height as isize)
+            y: clamp(0, triangle.a.y, window.height as isize),
+            depth: triangle.a.depth,
         };
         let mut pb = Vec2{
             x: clamp(0, triangle.b.x, window.width as isize),
-            y: clamp(0, triangle.b.y, window.height as isize)
+            y: clamp(0, triangle.b.y, window.height as isize),
+            depth: triangle.a.depth,
         };
         let mut pc = Vec2{
             x: clamp(0, triangle.c.x, window.width as isize),
-            y: clamp(0, triangle.c.y, window.height as isize)
+            y: clamp(0, triangle.c.y, window.height as isize),
+            depth: triangle.a.depth,
         };
 
         if pb.y < pa.y {
@@ -470,6 +482,10 @@ impl Renderer {
         let dyab = pb.y - pa.y;
         let dybc = pc.y - pb.y;
         let dyac = pc.y - pa.y;
+
+        let dzab = pb.depth - pa.depth;
+        let dzbc = pc.depth - pb.depth;
+        let dzac = pc.depth - pa.depth;
 
         let dab = if dyab != 0 { dxab as f32 / dyab as f32 } else { 0. };
         let dbc = if dybc != 0 { dxbc as f32 / dybc as f32 } else { 0. };
@@ -516,10 +532,10 @@ impl Renderer {
                 num_triangles -= 1;
 
                 let (num, clipped) = match p {
-                    0 => self.clip_against_line(t, Vec2{x: 0, y: 0}, Vec2{x: 1, y: 0}), // Left
-                    1 => self.clip_against_line(t, Vec2{x: width as isize, y: 0}, Vec2{x: -1, y: 0}), // Right
-                    2 => self.clip_against_line(t, Vec2{x: 0, y: 0}, Vec2{x: 0, y: 1}), // Top
-                    3 => self.clip_against_line(t, Vec2{x: 0, y: height as isize}, Vec2{x: 0, y: -1}), // Bottom
+                    0 => self.clip_against_line(t, Vec2{x: 0, y: 0, depth: 0.}, Vec2{x: 1, y: 0, depth: 0.}), // Left
+                    1 => self.clip_against_line(t, Vec2{x: width as isize, y: 0, depth: 0.}, Vec2{x: -1, y: 0, depth: 0.}), // Right
+                    2 => self.clip_against_line(t, Vec2{x: 0, y: 0, depth: 0.}, Vec2{x: 0, y: 1, depth: 0.}), // Top
+                    3 => self.clip_against_line(t, Vec2{x: 0, y: height as isize, depth: 0.}, Vec2{x: 0, y: -1, depth: 0.}), // Bottom
                     _ => panic!("Unreachable"),
                 };
 
