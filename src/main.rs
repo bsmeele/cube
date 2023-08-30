@@ -81,12 +81,14 @@ fn main() {
     let mut mountains = Mesh::from_object_file("mountains.obj");
 
     let mut skull = Mesh::from_object_file("skull.obj");
+    renderer.rotate_mesh(&mut skull, Vec3{x: 0., y: 180., z: 0.});
+    renderer.translate_mesh(&mut skull, Vec3{x: 0., y: 0., z: 5.});
 
     let mut squirtle = Mesh::from_object_file("squirtle.obj");
     renderer.translate_mesh(&mut squirtle, Vec3{x: -120., y: -80., z: 50.});
     renderer.rotate_mesh(&mut squirtle, Vec3{x: 90., y: 180., z: 0.});
 
-    let mut fish = Mesh::from_object_file("squirtle.obj");
+    let mut model = mountains;
 
     while window.handle.is_open() && !window.handle.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -136,36 +138,14 @@ fn main() {
         if window.handle.is_key_down(Key::R) { renderer.camera = Camera::default(); }
 
         // ---------- Simulate ----------
-        // renderer.rotate_mesh(&mut cube, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
+        // renderer.rotate_mesh(&mut model, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
 
-        // renderer.rotate_mesh(&mut ship, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
-
-        // renderer.rotate_mesh(&mut teapot, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
-
-        // renderer.rotate_mesh(&mut skull, Vec3{x: 0.03 * delta_time.as_millis() as f32, y: 0.045 * delta_time.as_millis() as f32, z: 0.06 * delta_time.as_millis() as f32});
 
         // ---------- Render ----------
         renderer.clear_screen(&mut window, colors::BLACK);
 
-        // renderer.draw_mesh(&mut window, &axis);
-
-        // renderer.depth_sort_mesh(&mut cube);
-        // renderer.draw_mesh(&mut window, &cube);
-
-        // renderer.depth_sort_mesh(&mut teapot);
-        // renderer.draw_mesh(&mut window, &teapot);
-
-        // renderer.depth_sort_mesh(&mut ship);
-        // renderer.draw_mesh(&mut window, &ship);
-
-        renderer.depth_sort_mesh(&mut mountains);
-        renderer.draw_mesh(&mut window, &mountains);
-
-        // renderer.depth_sort_mesh(&mut skull);
-        // renderer.draw_mesh(&mut window, &skull);
-
-        // renderer.depth_sort_mesh(&mut squirtle);
-        // renderer.draw_mesh(&mut window, &squirtle);
+        renderer.depth_sort_mesh(&mut model);
+        renderer.draw_mesh(&mut window, &model);
 
         // ---------- Update ----------
         window.handle.update_with_buffer(&window.buffer, window.width, window.height).unwrap();
