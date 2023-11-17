@@ -32,13 +32,14 @@ pub fn benchmark(c: &mut Criterion) {
 
             let mut renderer = Renderer::new(90.);
 
-            let mut model = Mesh::from_object_file("squirtle.obj");
-            renderer.translate_mesh(&mut model, Vec3{x: -120., y: -80., z: 50.});
-            renderer.rotate_mesh(&mut model, Vec3{x: 90., y: 180., z: 0.});
+            let mut model = Mesh::from_object_file("skull.obj");
+            renderer.rotate_mesh(&mut model, Vec3{x: 0., y: 180., z: 0.});
+            renderer.translate_mesh(&mut model, Vec3{x: 0., y: 0., z: 5.});
 
             for _ in 0..100 {
                 renderer.clear_screen(&mut window, colors::BLACK);
                 renderer.rotate_mesh(&mut model, Vec3{x: 0.03, y: 0.045, z: 0.06});
+                renderer.depth_sort_mesh(&mut model);
                 renderer.draw_mesh(&mut window, &model);
             }
         })
