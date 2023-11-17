@@ -397,6 +397,7 @@ impl Renderer {
     }
 
     fn scanline_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+        // Note: No depth buffer implemented
         let mut pa = Vec2{
             x: clamp(0, triangle.a.x, window.width as isize),
             y: clamp(0, triangle.a.y, window.height as isize),
