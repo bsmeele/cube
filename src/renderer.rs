@@ -457,12 +457,12 @@ impl Renderer {
         let mut pb = Vec2{
             x: clamp(0, triangle.b.x, window.width as isize),
             y: clamp(0, triangle.b.y, window.height as isize),
-            depth: triangle.a.depth,
+            depth: triangle.b.depth,
         };
         let mut pc = Vec2{
             x: clamp(0, triangle.c.x, window.width as isize),
             y: clamp(0, triangle.c.y, window.height as isize),
-            depth: triangle.a.depth,
+            depth: triangle.c.depth,
         };
 
         if pb.y < pa.y {
@@ -487,37 +487,59 @@ impl Renderer {
         let dzbc = pc.depth - pb.depth;
         let dzac = pc.depth - pa.depth;
 
-        let dab = if dyab != 0 { dxab as f32 / dyab as f32 } else { 0. };
-        let dbc = if dybc != 0 { dxbc as f32 / dybc as f32 } else { 0. };
-        let dac = if dyac != 0 { dxac as f32 / dyac as f32 } else { 0. };
+        let dxab = if dyab != 0 { dxab as f32 / dyab as f32 } else { 0. };
+        let dxbc = if dybc != 0 { dxbc as f32 / dybc as f32 } else { 0. };
+        let dxac = if dyac != 0 { dxac as f32 / dyac as f32 } else { 0. };
+
+        let dzab = if dyab != 0 { dzab as f32 / dyab as f32 } else { 0. };
+        let dzbc = if dybc != 0 { dzbc as f32 / dybc as f32 } else { 0. };
+        let dzac = if dyac != 0 { dzac as f32 / dyac as f32 } else { 0. };
 
         let mut xac = pa.x as f32;
         let mut xabc = pa.x as f32;
 
+        let mut zac = pa.depth;
+        let mut zabc = pa.depth;
+
         for y in pa.y..pb.y {
-            let (x1, x2) = if xac < xabc {
-                ( xac.floor() as usize, xabc.floor() as usize)
+            let (x1, x2, z1, z2) = if xac < xabc {
+                (xac.floor() as usize, xabc.floor() as usize, zac, zabc)
             } else {
-                ( xabc.floor() as usize, xac.floor() as usize)
+                (xabc.floor() as usize, xac.floor() as usize, zabc, zac)
             };
+            let dz = (z2 - z1) / ((x2 - x1) as f32);
+            let mut z = z1;
             for x in x1..x2 {
-                window.buffer[x + y as usize * window.width] = color;
+                if z < window.depth_buffer[x + y as usize * window.width] {
+                    window.buffer[x + y as usize * window.width] = color;
+                    window.depth_buffer[x + y as usize * window.width] = z
+                }
+                z += dz
             }
-            xac += dac;
-            xabc += dab;
+            xac += dxac;
+            xabc += dxab;
+            zac += dzac;
+            zabc += dzab;
         }
         xabc = pb.x as f32;
+        zabc = pb.depth;
         for y in pb.y..pc.y {
-            let (x1, x2) = if xac < xabc {
-                ( xac.floor() as usize, xabc.floor() as usize)
+            let (x1, x2, z1, z2) = if xac < xabc {
+                (xac.floor() as usize, xabc.floor() as usize, zac, zabc)
             } else {
-                ( xabc.floor() as usize, xac.floor() as usize)
+                (xabc.floor() as usize, xac.floor() as usize, zabc, zac)
             };
+            let dz = (z2 - z1) / ((x2 - x1) as f32);
+            let mut z = z1;
             for x in x1..x2 {
-                window.buffer[x + y as usize * window.width] = color;
+                if z < window.depth_buffer[x + y as usize * window.width] {
+                    window.buffer[x + y as usize * window.width] = color;
+                    window.depth_buffer[x + y as usize * window.width] = z
+                }
+                z += dz
             }
-            xac += dac;
-            xabc += dbc;
+            xac += dxac;
+            xabc += dxbc;
         }
     }
 

@@ -152,7 +152,7 @@ fn main() {
         // renderer.depth_sort_mesh(&mut ship);
         // renderer.draw_mesh(&mut window, &ship);
 
-        renderer.depth_sort_mesh(&mut mountains);
+        // renderer.depth_sort_mesh(&mut mountains);
         renderer.draw_mesh(&mut window, &mountains);
 
         // renderer.depth_sort_mesh(&mut skull);
