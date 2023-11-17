@@ -81,6 +81,8 @@ fn main() {
     let mut mountains = Mesh::from_object_file("mountains.obj");
 
     let mut skull = Mesh::from_object_file("skull.obj");
+    renderer.rotate_mesh(&mut skull, Vec3{x: 0., y: 180., z: 0.});
+    renderer.translate_mesh(&mut skull, Vec3{x: 0., y: 0., z: 5.});
 
     while window.handle.is_open() && !window.handle.is_key_down(Key::Escape) {
         let current_time = Instant::now();
@@ -153,10 +155,10 @@ fn main() {
         // renderer.draw_mesh(&mut window, &ship);
 
         // renderer.depth_sort_mesh(&mut mountains);
-        renderer.draw_mesh(&mut window, &mountains);
+        // renderer.draw_mesh(&mut window, &mountains);
 
         // renderer.depth_sort_mesh(&mut skull);
-        // renderer.draw_mesh(&mut window, &skull);
+        renderer.draw_mesh(&mut window, &skull);
 
         // ---------- Update ----------
         window.handle.update_with_buffer(&window.buffer, window.width, window.height).unwrap();
