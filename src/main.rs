@@ -84,6 +84,10 @@ fn main() {
     renderer.rotate_mesh(&mut skull, Vec3{x: 0., y: 180., z: 0.});
     renderer.translate_mesh(&mut skull, Vec3{x: 0., y: 0., z: 5.});
 
+    let mut squirtle = Mesh::from_object_file("squirtle.obj");
+    renderer.translate_mesh(&mut squirtle, Vec3{x: -120., y: -80., z: 50.});
+    renderer.rotate_mesh(&mut squirtle, Vec3{x: 90., y: 180., z: 0.});
+
     while window.handle.is_open() && !window.handle.is_key_down(Key::Escape) {
         let current_time = Instant::now();
         let delta_time = current_time - last_frame_time;
@@ -159,6 +163,9 @@ fn main() {
 
         // renderer.depth_sort_mesh(&mut skull);
         renderer.draw_mesh(&mut window, &skull);
+
+        // renderer.depth_sort_mesh(&mut squirtle);
+        // renderer.draw_mesh(&mut window, &squirtle);
 
         // ---------- Update ----------
         window.handle.update_with_buffer(&window.buffer, window.width, window.height).unwrap();
