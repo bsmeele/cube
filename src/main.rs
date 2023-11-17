@@ -144,7 +144,7 @@ fn main() {
         // ---------- Render ----------
         renderer.clear_screen(&mut window, colors::BLACK);
 
-        renderer.depth_sort_mesh(&mut model);
+        // renderer.depth_sort_mesh(&mut model);
         renderer.draw_mesh(&mut window, &model);
 
         // ---------- Update ----------
