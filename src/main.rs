@@ -5,8 +5,11 @@ use std::time::{Duration, Instant};
 
 mod renderer;
 mod window;
+mod shapes;
 
-use renderer::{Renderer, Camera, Mesh, Polygon, Triangle, Vec3};
+use renderer::{Renderer, Camera};
+use shapes::mesh::{Mesh, Polygon, Triangle};
+use shapes::vec3::Vec3;
 use window::Window;
 
 const SCALE: usize = 1;
@@ -35,7 +38,7 @@ fn main() {
 
     let mut renderer = Renderer::new(90.);
 
-    let axis = Mesh{
+    let _axis = Mesh{
         polygon_list: vec![
             // X-axis
             Polygon{triangle: Triangle{a: Vec3{x: 1000., y: 0., z: 50.}, b: Vec3{x: 0., y: 0., z: 50.}, c: Vec3{x: -1000., y: 0., z: 50.}}, color: colors::RED, fill: false},
@@ -46,49 +49,53 @@ fn main() {
         ],
     };
 
-    let mut cube = Mesh{
-        polygon_list: vec![
-            // Front face
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: 1., y: 1., z: 4.}, c: Vec3{x: 1., y: -1., z: 4.}}, color: colors::BLUE, fill: true},
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: -1., y: 1., z: 4.}, c: Vec3{x: 1., y: 1., z: 4.}}, color: colors::BLUE, fill: true},
+    let model_select = "mountains";
+    #[allow(unused_mut)]
+    let mut model = match model_select {
+        "cube" => Mesh{
+            polygon_list: vec![
+                // Front face
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: 1., y: 1., z: 4.}, c: Vec3{x: 1., y: -1., z: 4.}}, color: colors::BLUE, fill: true},
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: -1., y: 1., z: 4.}, c: Vec3{x: 1., y: 1., z: 4.}}, color: colors::BLUE, fill: true},
 
-            // Right face
-            Polygon{triangle: Triangle{a: Vec3{x: 1., y: -1., z: 4.}, b: Vec3{x: 1., y: 1., z: 6.}, c: Vec3{x: 1., y: -1., z: 6.}}, color: colors::RED, fill: true},
-            Polygon{triangle: Triangle{a: Vec3{x: 1., y: -1., z: 4.}, b: Vec3{x: 1., y: 1., z: 4.}, c: Vec3{x: 1., y: 1., z: 6.}}, color: colors::RED, fill: true},
+                // Right face
+                Polygon{triangle: Triangle{a: Vec3{x: 1., y: -1., z: 4.}, b: Vec3{x: 1., y: 1., z: 6.}, c: Vec3{x: 1., y: -1., z: 6.}}, color: colors::RED, fill: true},
+                Polygon{triangle: Triangle{a: Vec3{x: 1., y: -1., z: 4.}, b: Vec3{x: 1., y: 1., z: 4.}, c: Vec3{x: 1., y: 1., z: 6.}}, color: colors::RED, fill: true},
 
-            // Back face
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 6.}, b: Vec3{x: 1., y: -1., z: 6.}, c: Vec3{x: 1., y: 1., z: 6.}}, color: colors::GREEN, fill: true},
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 6.}, b: Vec3{x: 1., y: 1., z: 6.}, c: Vec3{x: -1., y: 1., z: 6.}}, color: colors::GREEN, fill: true},
+                // Back face
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 6.}, b: Vec3{x: 1., y: -1., z: 6.}, c: Vec3{x: 1., y: 1., z: 6.}}, color: colors::GREEN, fill: true},
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 6.}, b: Vec3{x: 1., y: 1., z: 6.}, c: Vec3{x: -1., y: 1., z: 6.}}, color: colors::GREEN, fill: true},
 
-            // Left face
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: -1., y: -1., z: 6.}, c: Vec3{x: -1., y: 1., z: 6.}}, color: colors::ORANGE, fill: true},
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: -1., y: 1., z: 6.}, c: Vec3{x: -1., y: 1., z: 4.}}, color: colors::ORANGE, fill: true},
+                // Left face
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: -1., y: -1., z: 6.}, c: Vec3{x: -1., y: 1., z: 6.}}, color: colors::ORANGE, fill: true},
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: -1., y: 1., z: 6.}, c: Vec3{x: -1., y: 1., z: 4.}}, color: colors::ORANGE, fill: true},
 
-            // Top face
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: 1., z: 4.}, b: Vec3{x: 1., y: 1., z: 6.}, c: Vec3{x: 1., y: 1., z: 4.}}, color: colors::YELLOW, fill: true},
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: 1., z: 4.}, b: Vec3{x: -1., y: 1., z: 6.}, c: Vec3{x: 1., y: 1., z: 6.}}, color: colors::YELLOW, fill: true},
+                // Top face
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: 1., z: 4.}, b: Vec3{x: 1., y: 1., z: 6.}, c: Vec3{x: 1., y: 1., z: 4.}}, color: colors::YELLOW, fill: true},
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: 1., z: 4.}, b: Vec3{x: -1., y: 1., z: 6.}, c: Vec3{x: 1., y: 1., z: 6.}}, color: colors::YELLOW, fill: true},
 
-            // Bottom face
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: 1., y: -1., z: 4.}, c: Vec3{x: 1., y: -1., z: 6.}}, color: colors::WHITE, fill: true},
-            Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: 1., y: -1., z: 6.}, c: Vec3{x: -1., y: -1., z: 6.}}, color: colors::WHITE, fill: true},
-        ],
+                // Bottom face
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: 1., y: -1., z: 4.}, c: Vec3{x: 1., y: -1., z: 6.}}, color: colors::WHITE, fill: true},
+                Polygon{triangle: Triangle{a: Vec3{x: -1., y: -1., z: 4.}, b: Vec3{x: 1., y: -1., z: 6.}, c: Vec3{x: -1., y: -1., z: 6.}}, color: colors::WHITE, fill: true},
+            ],
+        },
+        "ship" => Mesh::from_object_file("VideoShip.obj"),
+        "teapot" => Mesh::from_object_file("teapot.obj"),
+        "mountains" => Mesh::from_object_file("mountains.obj"),
+        "skull" => {
+            let mut skull = Mesh::from_object_file("skull.obj");
+            renderer.rotate_mesh(&mut skull, Vec3{x: 0., y: 180., z: 0.});
+            renderer.translate_mesh(&mut skull, Vec3{x: 0., y: 0., z: 5.});
+            skull
+        }
+        "squirtle" => {
+            let mut squirtle = Mesh::from_object_file("squirtle.obj");
+            renderer.translate_mesh(&mut squirtle, Vec3{x: -120., y: -80., z: 50.});
+            renderer.rotate_mesh(&mut squirtle, Vec3{x: 90., y: 180., z: 0.});
+            squirtle
+        }
+        _ => panic!()
     };
-
-    let mut ship = Mesh::from_object_file("VideoShip.obj");
-
-    let mut teapot = Mesh::from_object_file("teapot.obj");
-
-    let mut mountains = Mesh::from_object_file("mountains.obj");
-
-    let mut skull = Mesh::from_object_file("skull.obj");
-    renderer.rotate_mesh(&mut skull, Vec3{x: 0., y: 180., z: 0.});
-    renderer.translate_mesh(&mut skull, Vec3{x: 0., y: 0., z: 5.});
-
-    let mut squirtle = Mesh::from_object_file("squirtle.obj");
-    renderer.translate_mesh(&mut squirtle, Vec3{x: -120., y: -80., z: 50.});
-    renderer.rotate_mesh(&mut squirtle, Vec3{x: 90., y: 180., z: 0.});
-
-    let mut model = mountains;
 
     while window.handle.is_open() && !window.handle.is_key_down(Key::Escape) {
         let current_time = Instant::now();

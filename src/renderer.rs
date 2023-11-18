@@ -1,11 +1,13 @@
 use std::cmp::Ordering;
 use std::collections::VecDeque;
 use minifb::clamp;
-use crate::window::Window;
 use std::f32::consts::PI;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
 use std::mem::swap;
+
+use crate::window::Window;
+use crate::shapes::vec2::Vec2;
+use crate::shapes::vec3::Vec3;
+use crate::shapes::mesh::{Mesh, Polygon, Triangle, Triangle2D};
 
 pub struct Renderer {
     pub camera: Camera,
@@ -25,143 +27,6 @@ impl Default for Camera {
             pitch: 0.,
             yaw: 0.,
         }
-    }
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-struct Vec2 { // Used for the location on the screen, meaning positive y is down
-x: isize,
-    y: isize,
-    depth: f32,
-}
-impl Vec2 {
-    pub fn add(&self, v: &Vec2) -> Self {
-        Self {
-            x: self.x + v.x,
-            y: self.y + v.y,
-            depth: self.depth + v.depth,
-        }
-    }
-    pub fn sub(&self, v: &Vec2) -> Self {
-        Self {
-            x: self.x - v.x,
-            y: self.y - v.y,
-            depth: self.depth - v.depth,
-        }
-    }
-    pub fn dot(&self, v: &Vec2) -> isize {
-        self.x * v.x + self.y * v.y
-    }
-
-    pub fn length(&self) -> f32 { (self.dot(&self) as f32).sqrt() }
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Vec3 { // Used for the location in the world
-pub x: f32,
-    pub y: f32,
-    pub z: f32,
-}
-impl Vec3 {
-    pub fn add(&self, v: &Vec3) -> Self {
-        Self {
-            x: self.x + v.x,
-            y: self.y + v.y,
-            z: self.z + v.z,
-        }
-    }
-    pub fn sub(&self, v: &Vec3) -> Self {
-        Self {
-            x: self.x - v.x,
-            y: self.y - v.y,
-            z: self.z - v.z,
-        }
-    }
-    pub fn scale(&self, s: f32) -> Self {
-        Self {
-            x: self.x * s,
-            y: self.y * s,
-            z: self.z * s,
-        }
-    }
-    pub fn dot(&self, v: &Vec3) -> f32 {
-        self.x * v.x + self.y * v.y + self.z * v.z
-    }
-    pub fn cross(&self, v: &Vec3) -> Self {
-        Self {
-            x: self.y * v.z - self.z * v.y,
-            y: self.z * v.x - self.x * v.z,
-            z: self.x * v.y - self.y * v.x
-        }
-    }
-    pub fn length(&self) -> f32 { self.dot(&self).sqrt() }
-    pub fn normalise(&self) -> Self {
-        let l = self.length();
-        self.scale(1./l)
-    }
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-pub struct Triangle {
-    pub a: Vec3,
-    pub b: Vec3,
-    pub c: Vec3,
-}
-
-#[derive(Copy, Clone, Debug, Default)]
-struct Triangle2D {
-    pub a: Vec2,
-    pub b: Vec2,
-    pub c: Vec2,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Polygon {
-    pub triangle: Triangle,
-    pub color: u32,
-    pub fill: bool,
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct Mesh {
-    pub polygon_list: Vec<Polygon>,
-}
-impl Mesh {
-    pub fn from_object_file(file_name: &str) -> Self {
-        let file_path = String::from("objects/") + file_name;
-        let file = match File::open(file_path) {
-            Ok(f) => f,
-            Err(e) => panic!("Could not open file: {}", e),
-        };
-        let reader = BufReader::new(file);
-
-        let mut v = Vec::new();
-        let mut mesh = Mesh::default();
-
-        for line in reader.lines() {
-            let line = line.unwrap();
-            let line: Vec<&str> = line.split(' ').collect();
-
-            match line[0] {
-                "v" => {
-                    let x = line[1].parse::<f32>().unwrap();
-                    let y = line[2].parse::<f32>().unwrap();
-                    let z = line[3].parse::<f32>().unwrap();
-
-                    v.push(Vec3 { x, y, z });
-                },
-                "f" => {
-                    let a = line[1].split('/').next().unwrap().parse::<usize>().unwrap();
-                    let b = line[2].split('/').next().unwrap().parse::<usize>().unwrap();
-                    let c = line[3].split('/').next().unwrap().parse::<usize>().unwrap();
-
-                    mesh.polygon_list.push(Polygon { triangle: Triangle { a: v[a - 1], b: v[b - 1], c: v[c - 1] }, color: 0xff_ff_ff_ff, fill: true })
-                },
-                _ => (),
-            }
-        }
-
-        mesh
     }
 }
 
@@ -351,22 +216,11 @@ impl Renderer {
         }
     }
 
+    #[allow(dead_code)]
     fn bressenham_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
-        let mut pa = Vec2{
-            x: clamp(0, triangle.a.x, window.width as isize),
-            y: clamp(0, triangle.a.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
-        let pb = Vec2{
-            x: clamp(0, triangle.b.x, window.width as isize),
-            y: clamp(0, triangle.b.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
-        let pc = Vec2{
-            x: clamp(0, triangle.c.x, window.width as isize),
-            y: clamp(0, triangle.c.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
+        let mut pa = triangle.a.clamp_screen(window.width as isize, window.height as isize);
+        let pb = triangle.b.clamp_screen(window.width as isize, window.height as isize);
+        let pc = triangle.c.clamp_screen(window.width as isize, window.height as isize);
 
         let dx = (pb.x - pa.x).abs();
         let sx = if pa.x < pb.x { 1 } else { -1 };
@@ -396,23 +250,12 @@ impl Renderer {
         }
     }
 
+    #[allow(dead_code)]
     fn scanline_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
         // Note: No depth buffer implemented
-        let mut pa = Vec2{
-            x: clamp(0, triangle.a.x, window.width as isize),
-            y: clamp(0, triangle.a.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
-        let pb = Vec2{
-            x: clamp(0, triangle.b.x, window.width as isize),
-            y: clamp(0, triangle.b.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
-        let pc = Vec2{
-            x: clamp(0, triangle.c.x, window.width as isize),
-            y: clamp(0, triangle.c.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
+        let pa = triangle.a.clamp_screen(window.width as isize, window.height as isize);
+        let pb = triangle.b.clamp_screen(window.width as isize, window.height as isize);
+        let pc = triangle.c.clamp_screen(window.width as isize, window.height as isize);
 
         let min_x = pa.x.min(pb.x).min(pc.x);
         let max_x = pa.x.max(pb.x).max(pc.x);
@@ -450,21 +293,9 @@ impl Renderer {
     }
 
     fn triangle_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
-        let mut pa = Vec2{
-            x: clamp(0, triangle.a.x, window.width as isize),
-            y: clamp(0, triangle.a.y, window.height as isize),
-            depth: triangle.a.depth,
-        };
-        let mut pb = Vec2{
-            x: clamp(0, triangle.b.x, window.width as isize),
-            y: clamp(0, triangle.b.y, window.height as isize),
-            depth: triangle.b.depth,
-        };
-        let mut pc = Vec2{
-            x: clamp(0, triangle.c.x, window.width as isize),
-            y: clamp(0, triangle.c.y, window.height as isize),
-            depth: triangle.c.depth,
-        };
+        let mut pa = triangle.a.clamp_screen(window.width as isize, window.height as isize);
+        let mut pb = triangle.b.clamp_screen(window.width as isize, window.height as isize);
+        let mut pc = triangle.c.clamp_screen(window.width as isize, window.height as isize);
 
         if pb.y < pa.y {
             swap(&mut pa, &mut pb);
@@ -522,8 +353,10 @@ impl Renderer {
             zac += dzac;
             zabc += dzab;
         }
+
         xabc = pb.x as f32;
         zabc = pb.depth;
+
         for y in pb.y..pc.y {
             let (x1, x2, z1, z2) = if xac < xabc {
                 (xac.floor() as usize, xabc.floor() as usize, zac, zabc)
@@ -541,6 +374,8 @@ impl Renderer {
             }
             xac += dxac;
             xabc += dxbc;
+            zac += dzac;
+            zabc += dzbc;
         }
     }
 
@@ -599,7 +434,7 @@ impl Renderer {
             num_outside += 1;
         } else {
             inside[num_inside] = triangle.c;
-            num_inside += 1;
+            // num_inside += 1;
         }
 
         match num_outside {
@@ -660,7 +495,7 @@ impl Renderer {
             num_outside += 1;
         } else {
             inside[num_inside] = triangle.c;
-            num_inside += 1;
+            // num_inside += 1;
         }
 
         match num_outside {
