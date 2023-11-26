@@ -1,4 +1,11 @@
 #[derive(Copy, Clone, Debug, Default)]
+pub struct Triangle {
+    pub a: Vec3,
+    pub b: Vec3,
+    pub c: Vec3,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
 pub struct Vec3 { // Used for the location in the world
     pub x: f32,
     pub y: f32,

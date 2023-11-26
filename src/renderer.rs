@@ -5,9 +5,9 @@ use std::f32::consts::PI;
 use std::mem::swap;
 
 use crate::window::Window;
-use crate::shapes::vec2::Vec2;
-use crate::shapes::vec3::Vec3;
-use crate::shapes::mesh::{Mesh, Polygon, Triangle, Triangle2D};
+use crate::shapes::vec_screen::{VecScreen, TriangleScreen};
+use crate::shapes::vec3::{Vec3, Triangle};
+use crate::shapes::mesh::{Mesh, Polygon};
 
 pub struct Renderer {
     pub camera: Camera,
@@ -31,7 +31,7 @@ impl Default for Camera {
 }
 
 // Draws a line between two points based on the bressenham algorithm
-fn bresenham_line(window: &mut Window, start: Vec2, end: Vec2, color: u32) {
+fn bresenham_line(window: &mut Window, start: VecScreen, end: VecScreen, color: u32) {
     let mut start = start;
     let dx = (end.x - start.x).abs();
     let sx = if start.x < end.x { 1 } else { -1 };
@@ -65,11 +65,11 @@ fn bresenham_line(window: &mut Window, start: Vec2, end: Vec2, color: u32) {
     }
 }
 
-fn line_intersect(start: &Vec2, end: &Vec2, line_p: &Vec2, line_n: &Vec2) -> Vec2 {
+fn line_intersect(start: &VecScreen, end: &VecScreen, line_p: &VecScreen, line_n: &VecScreen) -> VecScreen {
     let d1 = end.sub(&start);
     let d2 = line_p.sub(&start);
     let t = line_n.dot(&d2) as f32 / line_n.dot(&d1) as f32;
-    start.add(&Vec2{x: (d1.x as f32 * t).floor() as isize, y: (d1.y as f32 * t).floor() as isize, depth: d1.depth * t})
+    start.add(&VecScreen{x: (d1.x as f32 * t).floor() as isize, y: (d1.y as f32 * t).floor() as isize, depth: d1.depth * t})
 }
 
 fn line_intersect_plane(start: &Vec3, end: &Vec3, plane_p: &Vec3, plane_n: &Vec3) -> Vec3 {
@@ -96,7 +96,7 @@ impl Renderer {
         window.depth_buffer = vec![f32::MAX; window.width * window.height];
     }
 
-    fn draw_line(&self, window: &mut Window, start: Vec2, end: Vec2, color: u32) {
+    fn draw_line(&self, window: &mut Window, start: VecScreen, end: VecScreen, color: u32) {
         let mut start = start;
         start.x = clamp(0, start.x, window.width as isize);
         start.y = clamp(0, start.y, window.height as isize);
@@ -109,7 +109,7 @@ impl Renderer {
     }
 
     // Projects a 3D point on the 2D screen
-    fn project(&self, window: &Window, point: Vec3) -> Vec2 {
+    fn project(&self, window: &Window, point: Vec3) -> VecScreen {
         let mut point = point;
 
         // Translate towards camera
@@ -132,7 +132,7 @@ impl Renderer {
         x += window.width as f32 / 2.;
         y += window.height as f32 / 2.;
 
-        return Vec2{x: x as isize, y: y as isize, depth: point.z};
+        return VecScreen{x: x as isize, y: y as isize, depth: point.z};
     }
 
     // Rotates a point around (0, 0, 0), angles in degrees
@@ -191,7 +191,7 @@ impl Renderer {
             let pa = self.project(window, triangle.a);
             let pb = self.project(window, triangle.b);
             let pc = self.project(window, triangle.c);
-            let t = Triangle2D { a: pa, b: pb, c: pc };
+            let t = TriangleScreen { a: pa, b: pb, c: pc };
 
             // Clipping
             let triangle_list = self.clip_against_screen(t, window.width, window.height);
@@ -217,7 +217,7 @@ impl Renderer {
     }
 
     #[allow(dead_code)]
-    fn bressenham_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+    fn bressenham_fill(&self, window: &mut Window, triangle: &TriangleScreen, color: u32) {
         let mut pa = triangle.a.clamp_screen(window.width as isize, window.height as isize);
         let pb = triangle.b.clamp_screen(window.width as isize, window.height as isize);
         let pc = triangle.c.clamp_screen(window.width as isize, window.height as isize);
@@ -251,7 +251,7 @@ impl Renderer {
     }
 
     #[allow(dead_code)]
-    fn scanline_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+    fn scanline_fill(&self, window: &mut Window, triangle: &TriangleScreen, color: u32) {
         // Note: No depth buffer implemented
         let pa = triangle.a.clamp_screen(window.width as isize, window.height as isize);
         let pb = triangle.b.clamp_screen(window.width as isize, window.height as isize);
@@ -292,7 +292,7 @@ impl Renderer {
         }
     }
 
-    fn triangle_fill(&self, window: &mut Window, triangle: &Triangle2D, color: u32) {
+    fn triangle_fill(&self, window: &mut Window, triangle: &TriangleScreen, color: u32) {
         let mut pa = triangle.a.clamp_screen(window.width as isize, window.height as isize);
         let mut pb = triangle.b.clamp_screen(window.width as isize, window.height as isize);
         let mut pc = triangle.c.clamp_screen(window.width as isize, window.height as isize);
@@ -379,7 +379,7 @@ impl Renderer {
         }
     }
 
-    fn clip_against_screen(&self, triangle: Triangle2D, width: usize, height: usize) -> VecDeque<Triangle2D> {
+    fn clip_against_screen(&self, triangle: TriangleScreen, width: usize, height: usize) -> VecDeque<TriangleScreen> {
         let mut triangle_list = VecDeque::new();
         triangle_list.push_back(triangle);
         let mut num_triangles = 1;
@@ -390,10 +390,10 @@ impl Renderer {
                 num_triangles -= 1;
 
                 let (num, clipped) = match p {
-                    0 => self.clip_against_line(t, Vec2{x: 0, y: 0, depth: 0.}, Vec2{x: 1, y: 0, depth: 0.}), // Left
-                    1 => self.clip_against_line(t, Vec2{x: width as isize, y: 0, depth: 0.}, Vec2{x: -1, y: 0, depth: 0.}), // Right
-                    2 => self.clip_against_line(t, Vec2{x: 0, y: 0, depth: 0.}, Vec2{x: 0, y: 1, depth: 0.}), // Top
-                    3 => self.clip_against_line(t, Vec2{x: 0, y: height as isize, depth: 0.}, Vec2{x: 0, y: -1, depth: 0.}), // Bottom
+                    0 => self.clip_against_line(t, VecScreen{x: 0, y: 0, depth: 0.}, VecScreen{x: 1, y: 0, depth: 0.}), // Left
+                    1 => self.clip_against_line(t, VecScreen{x: width as isize, y: 0, depth: 0.}, VecScreen{x: -1, y: 0, depth: 0.}), // Right
+                    2 => self.clip_against_line(t, VecScreen{x: 0, y: 0, depth: 0.}, VecScreen{x: 0, y: 1, depth: 0.}), // Top
+                    3 => self.clip_against_line(t, VecScreen{x: 0, y: height as isize, depth: 0.}, VecScreen{x: 0, y: -1, depth: 0.}), // Bottom
                     _ => panic!("Unreachable"),
                 };
 
@@ -407,14 +407,14 @@ impl Renderer {
         triangle_list
     }
 
-    fn clip_against_line(&self, triangle: Triangle2D, line_p: Vec2, line_n: Vec2) -> (usize, [Triangle2D; 2]) {
-        let mut clipped = [Triangle2D::default(); 2];
+    fn clip_against_line(&self, triangle: TriangleScreen, line_p: VecScreen, line_n: VecScreen) -> (usize, [TriangleScreen; 2]) {
+        let mut clipped = [TriangleScreen::default(); 2];
 
         // determine inside/outside points
         let mut num_outside = 0;
         let mut num_inside = 0;
-        let mut outside = [Vec2::default(); 3];
-        let mut inside = [Vec2::default(); 3];
+        let mut outside = [VecScreen::default(); 3];
+        let mut inside = [VecScreen::default(); 3];
         if triangle.a.sub(&line_p).dot(&line_n) < 0 {
             outside[num_outside] = triangle.a;
             num_outside += 1;
@@ -448,8 +448,8 @@ impl Renderer {
                 let p2 = line_intersect(&inside[1], &outside[0], &line_p, &line_n);
 
                 // construct clipped triangles
-                clipped[0] = Triangle2D{a: inside[0], b: inside[1], c: p1};
-                clipped[1] = Triangle2D{a: inside[1], b: p1, c: p2};
+                clipped[0] = TriangleScreen{a: inside[0], b: inside[1], c: p1};
+                clipped[1] = TriangleScreen{a: inside[1], b: p1, c: p2};
 
                 (2, clipped)
             },
@@ -459,7 +459,7 @@ impl Renderer {
                 let p2 = line_intersect(&inside[0], &outside[1], &line_p, &line_n);
 
                 // construct clipped triangles
-                clipped[0] = Triangle2D{a: inside[0], b: p1, c: p2};
+                clipped[0] = TriangleScreen{a: inside[0], b: p1, c: p2};
 
                 (1, clipped)
             },

@@ -8,8 +8,9 @@ mod window;
 mod shapes;
 
 use renderer::{Renderer, Camera};
-use shapes::mesh::{Mesh, Polygon, Triangle};
-use shapes::vec3::Vec3;
+use shapes::mesh::{Mesh, Polygon};
+use shapes::vec3::{Vec3, Triangle};
+use shapes::vec_tex::TriangleTex;
 use window::Window;
 
 const SCALE: usize = 1;
